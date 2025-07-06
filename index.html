@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dictado por Voz para Ficha de Paciente</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Animación para el punto parpadeante */
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .blinking-dot {
+            animation: blink 1.5s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">Ficha de Atención al Paciente</h1>
+        <p class="text-gray-500 mb-6">Presiona el botón "Iniciar Dictado" y comienza a hablar para registrar las notas.</p>
+
+        <!-- Mensajes de Error -->
+        <div id="error-container" class="mb-4">
+            <div id="secure-warning" class="hidden p-3 bg-yellow-100 text-yellow-800 border border-yellow-300 rounded-lg">
+                <strong>Atención:</strong> El reconocimiento de voz requiere una conexión segura (HTTPS). Esta función no se activará en una página no segura.
+            </div>
+            <div id="permission-error" class="hidden p-3 bg-red-100 text-red-800 border border-red-300 rounded-lg">
+                <strong>Error de Permiso:</strong> Se ha denegado el acceso al micrófono. Por favor, habilita el permiso en la configuración de tu navegador para este sitio.
+            </div>
+            <div id="compatibility-error" class="hidden p-3 bg-gray-200 text-gray-700 border border-gray-300 rounded-lg">
+                Lo sentimos, tu navegador no soporta el reconocimiento de voz. Por favor, intenta con Google Chrome o Edge.
+            </div>
+        </div>
+
+        <!-- Campo de texto para las notas del paciente -->
+        <div class="mb-6">
+            <label for="patient-notes" class="block text-sm font-medium text-gray-700 mb-2">Notas del Paciente:</label>
+            <textarea id="patient-notes" rows="10" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow duration-200" placeholder="Las notas dictadas aparecerán aquí..."></textarea>
+        </div>
+
+        <!-- Controles y Estado -->
+        <div class="flex items-center justify-between">
+            <button id="record-button" class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-300 flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg id="mic-icon" class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                <span id="button-text">Iniciar Dictado</span>
+            </button>
+            <div id="status" class="flex items-center text-gray-600 font-medium hidden">
+                 <span class="w-3 h-3 bg-red-500 rounded-full mr-2 blinking-dot"></span>
+                 <span>Escuchando...</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Elementos del DOM ---
+        const recordButton = document.getElementById('record-button');
+        const buttonText = document.getElementById('button-text');
+        const notesTextarea = document.getElementById('patient-notes');
+        const statusDiv = document.getElementById('status');
+        const secureWarningDiv = document.getElementById('secure-warning');
+        const permissionErrorDiv = document.getElementById('permission-error');
+        const compatibilityErrorDiv = document.getElementById('compatibility-error');
+
+        // --- Verificación de Contexto Seguro y Compatibilidad ---
+        if (!window.isSecureContext) {
+            secureWarningDiv.classList.remove('hidden');
+            recordButton.disabled = true;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = SpeechRecognition ? new SpeechRecognition() : null;
+
+        let isRecording = false;
+        let finalTranscript = '';
+
+        if (recognition) {
+            // --- Configuración del Reconocimiento ---
+            recognition.lang = 'es-ES';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            // --- Manejadores de Eventos del Reconocimiento ---
+            recognition.onstart = () => {
+                isRecording = true;
+                statusDiv.classList.remove('hidden');
+                permissionErrorDiv.classList.add('hidden'); // Ocultar error si se inicia bien
+                buttonText.textContent = 'Detener Dictado';
+                recordButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                recordButton.classList.add('bg-red-600', 'hover:bg-red-700');
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                statusDiv.classList.add('hidden');
+                buttonText.textContent = 'Iniciar Dictado';
+                recordButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+                recordButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Error en el reconocimiento de voz:', event.error);
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    permissionErrorDiv.classList.remove('hidden');
+                }
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript + '. ';
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                notesTextarea.value = finalTranscript + interimTranscript;
+            };
+
+            // --- Evento del Botón ---
+            recordButton.addEventListener('click', () => {
+                if (!window.isSecureContext) return; // Doble chequeo
+                if (isRecording) {
+                    recognition.stop();
+                } else {
+                    finalTranscript = notesTextarea.value ? notesTextarea.value.trim() + ' ' : '';
+                    recognition.start();
+                }
+            });
+
+        } else {
+            // Navegador no compatible
+            compatibilityErrorDiv.classList.remove('hidden');
+            recordButton.disabled = true;
+        }
+    </script>
+</body>
+</html>
